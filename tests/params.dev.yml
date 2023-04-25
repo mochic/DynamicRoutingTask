@@ -1,0 +1,30 @@
+taskVersion: bur
+mouse_id: bur
+accumilator:
+  socketAddr: "127.0.0.1:9998"
+  meta:
+    header:
+      mouse_id: "999999"
+      task_id: DoC
+    rig_name: BEH.F-Box2
+    auto_rewarded: false
+    change_contrast: null
+    change_time: null
+    encoder:
+      count: 23670789
+      degree: 1040220.2197265625
+      radius_cm: 4.69
+    initial_contrast: null
+    lick_times: []
+    optogenetics: false
+    publish_time: "2023-03-23 09:48:29.652000"
+    response_latency: null
+    response_type: []
+    reward_frames: []
+    reward_times: []
+    rewarded: false
+    scheduled_change_time: 5
+    session_id: 1dfe5047-91f2-41ea-a3ec-776c169bc4df
+    startframe: 114746
+    starttime: 2248.6443523
+    stim_on_frames: []

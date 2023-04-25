@@ -9,10 +9,63 @@ from __future__ import division
 import itertools
 import json
 import sys
+import time
 import random
 import numpy as np
 from psychopy import visual
 from TaskControl import TaskControl
+import zmq
+
+
+def initAccumilatorInterface(socket_addr: str):
+    context = zmq.Context()
+    socket = context.socket(zmq.PUB)
+    socket.bind(f"tcp://{socket_addr}")
+    return context, socket
+
+
+def publishTaskHeader(socket: zmq.Socket, taskId: str, mouseId: str):
+    time.sleep(0.5)  # mirroring delays in camstim
+    socket.send_json({})  # first message can fail?
+    time.sleep(0.1)  # mirroring delays in camstim
+    header = {
+        "init_data": {
+            "task_id": taskId,
+            "mouse_id": mouseId,
+        },
+        "index": -1,
+    }
+    print("Publishing task header: %s" % header)
+    return socket.send_json(header)
+
+
+def publishTaskFooter(socket: zmq.Socket, taskId: str, mouseId: str):
+    header = {
+        "task_id": taskId,
+        "mouse_id": mouseId,
+    }
+    footer = {
+        'header': header,  # backwards compatibility hack for OAG
+        'init_data': header,  # backwards compatibility hack for OAG
+        'final_data': {},
+        "index": -2,
+
+    }
+    print("Publishing task footer: %s" % footer)
+    return socket.send_json(footer)
+
+
+def publishTrialResultToAccumilator(
+    socket: zmq.Socket,
+    accumilatorMetaInfo: dict,
+    trialData: dict,
+):
+    result = {
+        **accumilatorMetaInfo,
+        **trialData,
+    }
+    print("Publishing trial result: %s" % result)
+    return socket.send_json(result)
 
 
 class DynamicRouting1(TaskControl):
@@ -142,6 +195,16 @@ class DynamicRouting1(TaskControl):
             self.setDefaultParams(params['taskVersion'])
         else:
             self.taskVersion = None
+
+        # initialize trial result publisher on socket address expected by
+        # accumilator which is hopefully listening...
+        try:
+            self.__zmqContext, self.__zmqPubSocket = initAccumilatorInterface(
+                params["accumilator"]["socketAddr"],
+            )
+            self.__accumilatorMetaInfo = params["accumilator"]["meta"]
+        except Exception as e:
+            print("Error initializing publisher for accumilator.")
 
     def setDefaultParams(self, taskVersion):
         # dynamic routing task versions
@@ -919,6 +982,25 @@ class DynamicRouting1(TaskControl):
                 self.trialEndFrame.append(self._sessionFrame)
                 self._trialFrame = -1
                 blockTrialCount += 1
+
+                # publish results to accumilator
+                try:
+                    # is this a correct assumption?
+                    index = len(self.trialRewarded) - 1
+                    reward_number = sum(self.trialRewarded)
+                    publishTrialResultToAccumilator(
+                        self.__zmqPubSocket,
+                        self.__accumilatorMetaInfo,
+                        # trialData
+                        {
+                            "index": index,
+                            "cumulative_reward_number": reward_number,
+                            # TODO: replace 0.1 with real reward volume
+                            "cumulative_volume": reward_number * 0.1,
+                        },
+                    )
+                except Exception as e:
+                    print("Error publishing results to accumilator: %s" % e)
 
                 if (rewardSize == 0 and self.trialStim[-1] != 'catch' and self.trialResponse[-1]
                         and incorrectRepeatCount < self.incorrectTrialRepeats):
