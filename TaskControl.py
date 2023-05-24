@@ -16,6 +16,9 @@ import psychtoolbox.audio
 import sounddevice
 import nidaqmx
 import serial
+import zmq
+import datetime
+import time
 
 
 class TaskControl():
@@ -174,7 +177,17 @@ class TaskControl():
                         self.soundCalibrationFit = (28.655615630746905,-3.5166732104004796,61.36404105849515)
                 else:
                     raise ValueError(self.rigName + ' is not a recognized rig name')
-                
+        
+        self.accumulator_interface_attr_name = "accumulator_interface"
+        accumulator_params = params.get("accumulator")
+        if accumulator_params:
+            setattr(
+                self,
+                self.accumulator_interface_attr_name,
+                AccumulatorInterface(
+                    **accumulator_params,
+                ),
+            ) 
             
     def prepareSession(self,window=True):
         self._win = None
@@ -811,6 +824,67 @@ class LickTest(TaskControl):
             self.showFrame()
 
 
+class AccumulatorInterface:
+
+    def __init__(
+        self,
+        socket_address: str,
+        mouse_id: str,
+        task_id: str,
+        session_id: str,
+        rig_id: str,
+    ):
+        """
+        """
+        self.__socket_address = socket_address
+        self.__context = zmq.Context()
+        self.__socket = self.__context.socket(zmq.PUB)
+        # just mirroring legacy code settings, may be unneccessary
+        self.__socket.setsockopt(zmq.SNDHWM, 10)
+        self.__socket.bind(self.__socket_address)
+        self.__task_index = 0
+        self.__header_meta = {
+            "mouse_id": mouse_id,
+            "task_id": task_id,
+        }
+        self.__packet_template = {
+            'rig_name': rig_id,
+            "session_id": session_id,
+        }
+
+    def publish_header(self):
+        self._publish({
+            **self.__packet_template,
+            "init_data": self.__header_meta,
+            "index": -1,
+        })
+
+    def publish_footer(self):
+        self._publish({
+            **self.__packet_template,
+            "header": self.__header_meta,
+            "init_data": self.__header_meta,
+            "index": -2,
+        })
+
+    def publish(self, **values):
+        self._publish({
+            **self.__packet_template,
+            "index": self.__task_index,
+            **values,
+        })
+        self.__task_index += 1
+
+    def _publish(self, packet: dict):
+        # no idea why...supposedly this is debouncing something...
+        time.sleep(0.5)
+        timestamped_packet = {
+            # this is expected datetime format
+            "publish_time": str(datetime.datetime.now()),
+            **packet,
+        }
+        self.__socket.send_pyobj(timestamped_packet)
+
 
 def measureSound(params,soundVol,soundDur,soundInterval,nidaqDevName):
     
@@ -977,6 +1051,8 @@ def isStringSequence(obj):
 
                     
 if __name__ == "__main__":
+    import uuid
+
     paramsPath = sys.argv[1]
     with open(paramsPath,'r') as f:
         params = json.load(f)
@@ -1034,6 +1110,22 @@ if __name__ == "__main__":
         task.applyOptoWaveform(task.getOptoPulseWaveform(amp,dur))
         time.sleep(dur + 0.5)
         task.stopNidaqDevice()
+    elif params['taskVersion'] == 'accumulator_test':
+        ai = AccumulatorInterface(
+            session_id=str(uuid.uuid4()),
+            **params["accumulator"],
+        )
+        ai.publish_header()
+        cumulative_volume = 0.0
+        initial_time = time.time()
+        for _ in range(10):
+            ai.publish(
+                starttime=time.time() - initial_time,
+                cumulative_volume=cumulative_volume,
+            )
+            cumulative_volume += 0.05
+            time.sleep(5)
+        ai.publish_header()
     else:
         task = TaskControl(params)
         task.saveParams = False
