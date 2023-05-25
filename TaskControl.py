@@ -266,6 +266,13 @@ class TaskControl():
                 self.subjectName = str(subjectName)
             
             self.prepareSession()
+
+            accumulator_interface = getattr(
+                self,
+                self.accumulator_interface_attr_name,
+            )
+            if accumulator_interface:
+                accumulator_interface.publish_header()
             
             self.taskFlow()
         
