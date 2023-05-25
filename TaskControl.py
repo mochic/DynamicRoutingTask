@@ -261,16 +261,16 @@ class TaskControl():
         
         
     def start(self,subjectName=None):
+        accumulator_interface = getattr(
+            self,
+            self.accumulator_interface_attr_name,
+        )
         try:
             if subjectName is not None:
                 self.subjectName = str(subjectName)
             
             self.prepareSession()
 
-            accumulator_interface = getattr(
-                self,
-                self.accumulator_interface_attr_name,
-            )
             if accumulator_interface:
                 accumulator_interface.publish_header()
             
@@ -280,6 +280,8 @@ class TaskControl():
             raise
             
         finally:
+            if accumulator_interface:
+                accumulator_interface.publish_footer()
             self.completeSession()
     
     
