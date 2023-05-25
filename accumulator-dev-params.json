@@ -1,6 +1,9 @@
 {
-    "rig_id": "BEH.E",
-    "mouse_id": "999999",
-    "task_id": "DoC",
-    "socket_address": "tcp://*:9998"
+    "taskVersion": "accumulator_test",
+    "accumulator": {
+        "rig_id": "BEH.E",
+        "mouse_id": "999999",
+        "task_id": "DoC",
+        "socket_address": "tcp://*:9998"
+    }
 }
