@@ -9,6 +9,20 @@ import argparse
 import json
 import os
 import subprocess
+import requests
+import datetime
+
+
+def download_raw_text_from_github(github_uri):
+    """Intended for python 2.7
+    """
+    response = requests.get(github_uri)
+    if not response.status_code in (200, ):
+        response.raise_for_status()
+    path = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") +".py"
+    with open(path, "wb") as f:
+        f.write(response.content)
+    return path
 
 
 env = 'DynamicRoutingTaskDev'
@@ -35,6 +49,13 @@ if 'rigName' not in params:
     params['userName'] = params['user_id']
     params['subjectName'] = params['mouse_id']
     
+    if params["taskScript"].startswith("http"):
+        taskScript = os.path.abspath(
+            download_raw_text_from_github(params["taskScript"])
+        )
+    else:
+        taskScript = params["taskScript"]
+
     taskName = os.path.splitext(os.path.basename(params['taskScript']))[0]
     params['startTime'] = time.strftime('%Y%m%d_%H%M%S',time.localtime())
     params['savePath'] = os.path.join(OUTPUT_DIR,taskName + '_' + params['subjectName'] + '_' + params['startTime'] + '.hdf5')
@@ -67,7 +88,7 @@ if 'rigName' not in params:
 
 toRun = ('"C:\\Program Files\\AIBS_MPE\\SetVol\\SetVol.exe" unmute 100' + '\n' +
          'call activate ' + env + '\n' +
-         'python ' + '"' + params['taskScript'] + '" ' + '"' + paramsPath + '"')
+         'python ' + '"' + taskScript + '" ' + '"' + paramsPath + '"')
 
 batFile = os.path.join(paramsDir,'toRun.bat')
 
