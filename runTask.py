@@ -13,16 +13,36 @@ import requests
 import datetime
 
 
-def download_raw_text_from_github(github_uri):
+def download_raw_text_from_github(github_uri, path):
     """Intended for python 2.7
     """
     response = requests.get(github_uri)
     if not response.status_code in (200, ):
         response.raise_for_status()
-    path = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") +".py"
+
     with open(path, "wb") as f:
         f.write(response.content)
     return path
+
+
+def download_local_package(asset_map):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    package_dir = "DynamicRoutingTaskPackage-{}".format(timestamp)
+    os.mkdir(package_dir)
+    local_assets = {}
+    for asset_name, asset in asset_map.items():
+        filename = os.path.basename(asset)
+        local_path = os.path.abspath(
+            os.path.join(
+                package_dir,
+                filename,
+            )
+        )
+        local_assets[asset_name] = download_raw_text_from_github(
+            asset,
+            local_path
+        )
+    return local_assets
 
 
 env = 'DynamicRoutingTaskDev'
@@ -49,10 +69,10 @@ if 'rigName' not in params:
     params['userName'] = params['user_id']
     params['subjectName'] = params['mouse_id']
     
-    if params["taskScript"].startswith("http"):
-        taskScript = os.path.abspath(
-            download_raw_text_from_github(params["taskScript"])
-        )
+    ghTaskScriptParams = params.get("GHTaskScriptParams")
+    if ghTaskScriptParams:
+        local_assets = download_local_package(*ghTaskScriptParams)
+        taskScript = local_assets["taskScript"]
     else:
         taskScript = params["taskScript"]
 
